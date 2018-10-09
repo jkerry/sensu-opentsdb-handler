@@ -113,14 +113,12 @@ func sendMetrics(event *types.Event) error {
 		}
 		data.Tags = tags
 		dataPoints = append(dataPoints, data)
-		if err != nil {
-			return err
-		}
 	}
 
-	if nil, err := tsdbClient.Put(dataPoints, "details"); err != nil {
+	resp, err := tsdbClient.Put(dataPoints, "details")
+	if err != nil {
 		return err
 	}
-
+	log.Print(resp)
 	return nil
 }
