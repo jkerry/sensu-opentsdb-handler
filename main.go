@@ -1,0 +1,133 @@
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/bluebreezecf/opentsdb-goclient/client"
+	"github.com/bluebreezecf/opentsdb-goclient/config"
+	"github.com/sensu/sensu-go/types"
+	"github.com/spf13/cobra"
+)
+
+var (
+	addr  string
+	stdin *os.File
+)
+
+func main() {
+	rootCmd := configureRootCommand()
+	if err := rootCmd.Execute(); err != nil {
+		log.Fatal(err.Error())
+	}
+}
+
+func configureRootCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "sensu-opentsdb-handler",
+		Short: "an opentsdb handler built for use with sensu",
+		RunE:  run,
+	}
+
+	cmd.Flags().StringVarP(&addr,
+		"addr",
+		"a",
+		"",
+		"the address of the opentsdb server, should be of the form 'http://host:port'")
+
+	_ = cmd.MarkFlagRequired("addr")
+
+	return cmd
+}
+
+func run(cmd *cobra.Command, args []string) error {
+	if len(args) != 0 {
+		_ = cmd.Help()
+		return errors.New("invalid argument(s) received")
+	}
+
+	if stdin == nil {
+		stdin = os.Stdin
+	}
+
+	eventJSON, err := ioutil.ReadAll(stdin)
+	if err != nil {
+		return fmt.Errorf("failed to read stdin: %s", err.Error())
+	}
+
+	event := &types.Event{}
+	err = json.Unmarshal(eventJSON, event)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal stdin data: %s", err.Error())
+	}
+
+	if err = event.Validate(); err != nil {
+		return fmt.Errorf("failed to validate event: %s", err.Error())
+	}
+
+	if !event.HasMetrics() {
+		return fmt.Errorf("event does not contain metrics")
+	}
+
+	return sendMetrics(event)
+}
+
+func sendMetrics(event *types.Event) error {
+	var pt *client.Point
+	opentsdbCfg := config.OpenTSDBConfig{
+		OpentsdbHost: addr,
+	}
+	tsdbClient, err := client.NewClient(opentsdbCfg)
+	if err != nil {
+		fmt.Printf("%v\n", err)
+		return err
+	}
+
+	//0. Ping
+	if err = tsdbClient.Ping(); err != nil {
+		fmt.Println(err.Error())
+		return err
+	}
+	dataPoints := make([]client.DataPoint, 0)
+	for _, point := range event.Metrics.Points {
+		nameField := strings.Split(point.Name, ".")
+		name := nameField[0]
+		stringTimestamp := strconv.FormatInt(point.Timestamp, 10)
+		if len(stringTimestamp) > 10 {
+			stringTimestamp = stringTimestamp[:10]
+		}
+		t, err := strconv.ParseInt(stringTimestamp, 10, 64)
+		if err != nil {
+			return err
+		}
+		timestamp := time.Unix(t, 0)
+		tags := make(map[string]string)
+		tags["sensu_entity_id"] = event.Entity.ID
+		for _, tag := range point.Tags {
+			tags[tag.Name] = tag.Value
+		}
+		data := client.DataPoint{
+			Metric:    name,
+			Timestamp: timestamp,
+			Value:     fields,
+		}
+		data.Tags = tags
+		dataPoints = append(dataPoints, data)
+		if err != nil {
+			return err
+		}
+	}
+
+	if resp, err := tsdbClient.Put(dataPoints, "details"); err != nil {
+		return err
+	}
+
+	return nil
+}
