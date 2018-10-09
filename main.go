@@ -9,7 +9,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/bluebreezecf/opentsdb-goclient/client"
 	"github.com/bluebreezecf/opentsdb-goclient/config"
@@ -80,7 +79,6 @@ func run(cmd *cobra.Command, args []string) error {
 }
 
 func sendMetrics(event *types.Event) error {
-	var pt *client.Point
 	opentsdbCfg := config.OpenTSDBConfig{
 		OpentsdbHost: addr,
 	}
@@ -103,11 +101,6 @@ func sendMetrics(event *types.Event) error {
 		if len(stringTimestamp) > 10 {
 			stringTimestamp = stringTimestamp[:10]
 		}
-		t, err := strconv.ParseInt(stringTimestamp, 10, 64)
-		if err != nil {
-			return err
-		}
-		timestamp := time.Unix(t, 0)
 		tags := make(map[string]string)
 		tags["sensu_entity_id"] = event.Entity.ID
 		for _, tag := range point.Tags {
@@ -115,8 +108,8 @@ func sendMetrics(event *types.Event) error {
 		}
 		data := client.DataPoint{
 			Metric:    name,
-			Timestamp: timestamp,
-			Value:     fields,
+			Timestamp: point.Timestamp,
+			Value:     point.Value,
 		}
 		data.Tags = tags
 		dataPoints = append(dataPoints, data)
@@ -125,7 +118,7 @@ func sendMetrics(event *types.Event) error {
 		}
 	}
 
-	if resp, err := tsdbClient.Put(dataPoints, "details"); err != nil {
+	if nil, err := tsdbClient.Put(dataPoints, "details"); err != nil {
 		return err
 	}
 
