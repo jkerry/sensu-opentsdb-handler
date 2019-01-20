@@ -79,6 +79,7 @@ func run(cmd *cobra.Command, args []string) error {
 }
 
 func sendMetrics(event *types.Event) error {
+	fmt.Println(addr)
 	opentsdbCfg := config.OpenTSDBConfig{
 		OpentsdbHost: addr,
 	}
@@ -102,7 +103,7 @@ func sendMetrics(event *types.Event) error {
 			stringTimestamp = stringTimestamp[:10]
 		}
 		tags := make(map[string]string)
-		tags["sensu_entity_id"] = event.Entity.ID
+		tags["sensu_entity_id"] = event.Entity.ObjectMeta.Name
 		for _, tag := range point.Tags {
 			tags[tag.Name] = tag.Value
 		}
