@@ -2,7 +2,8 @@ builds:
   - env:
     - CGO_ENABLED=0
   - main: main.go
-    binary: sensu-opentsdb-handler
+    # Set the binary output location to bin/ so archive will comply with Sensu Go Asset structure
+    binary: bin/sensu-opentsdb-handler
     goos:
       - linux
     goarch:
