@@ -39,7 +39,7 @@ func configureRootCommand() *cobra.Command {
 		"addr",
 		"a",
 		"",
-		"the address of the opentsdb server, should be of the form 'http://host:port'")
+		"the address of the opentsdb server, should be of the form 'host:port'")
 
 	_ = cmd.MarkFlagRequired("addr")
 
